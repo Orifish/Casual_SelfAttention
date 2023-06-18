@@ -32,7 +32,7 @@ __global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* i
 
 
 
-__global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin){
+__global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin,float* row_sum){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
     int idx = blk_idx * blockDim.x + thd_idx;
@@ -47,16 +47,18 @@ __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_
         if(next_claas>class_num){       // 如果已经是最后一类了
             int this_start_row = 0;
             int next_start_row = N;
-            for (int i=true_class;i>0;i--){
+            for (int i=this_class;i>0;i--){
                 this_start_row += index_num[this_class];
             }       // 定这种类别和下个类别的初始行
         }     
         else{
             int this_start_row = 0;
             int next_start_row = 0;
-            for (int i=true_class;i>0;i--){
+            for (int i=this_class;i>0;i--){
                 this_start_row += index_num[this_class];
-                next_start_row += ineex_num[next_class];
+            }       // 定这种类别和下个类别的初始行
+            for (int i=this_class;i>0;i--){
+                next_start_row += index_num[next_class];
             }       // 定这种类别和下个类别的初始行
         }
             if(row<this_start_row)  return;
@@ -66,7 +68,7 @@ __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_
                 mid_NN += QKV[row*C + i] * QKV[row*C + i];       // 不同于广义的矩阵乘法，我们是能避免转置的，这里的QKV应该是Q和K
             }
             // 得到了矩阵成积结果了，开始Softmax过程，每个Thread负责一个输出元素。到这里的已经是在需要输出的范围内的数据了。
-            atomicAdd(&Block_sum,exp(mid_NN));
+            atomicAdd(&row_sum,exp(mid_NN));
             waitnum += 1;       // 开始等待
             while(waitnum<N*N);     // 同步整个块
             // __syncthreads();        // 此处需要保证一个block一定是一行，这块应该不行。
@@ -81,7 +83,7 @@ __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_
 
 // sort_num是每一个行对应类，在自己类中的排序，在pytorch中给出，可以用==index来得到。
 // index_num是已经降序排序完的索引对应的数量
-void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin) {
+void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin,float* row_sum) {
     cudaError_t err;
 
     // dim3 blocks(DIVUP(N * C, THREADS_PER_BLOCK)); // blockIdx.x(col), blockIdx.y(row)
@@ -101,7 +103,7 @@ void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_inde
     */
     long value=0;
     cudaMemcpyToSymbol(wait_num, &value, sizeof(long));     // 初始化wai_num
-    CasualSA_Kernal<<<blocks,threads>>>(QKV,N,C,output,class_index,index_num,class_num,Origin);     
+    CasualSA_Kernal<<<blocks,threads>>>(QKV,N,C,output,class_index,index_num,class_num,Origin,row_sum);     
     // cudaFree(Sort_Matrix); 
     // cudaFree(Origin);
     // SA_forward_kernel<<<blocks, threads>>>(batch_size, class_num,N,C,class_index,index_num,Q,K,V,next_index,output);
