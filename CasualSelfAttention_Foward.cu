@@ -27,7 +27,7 @@
         }
         } 
     }
-*/
+*///
 
 __global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* index_num,int* class_index,int* sort_num,int* Orign){
     int blk_idx = blockIdx.x;
