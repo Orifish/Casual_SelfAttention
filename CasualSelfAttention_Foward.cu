@@ -29,7 +29,6 @@
     }
 */
 
-
 __global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* index_num,int* class_index,int* sort_num,int* Orign){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
@@ -53,6 +52,8 @@ __global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* i
 }
 
 
+
+
 __global__ void Matrix_Mul(float* QKV,int N,int C,float* output){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
@@ -61,7 +62,7 @@ __global__ void Matrix_Mul(float* QKV,int N,int C,float* output){
     int col = idx%C;
     output[row][col] = 0;
     for(int i=0;i<C;i++){
-        output[row][col] = QKV[row][i] * QKV[row][i];       // 不同于广义的矩阵乘法，我们是能避免转置的
+        output[row*C + col] = QKV[row*C + i] * QKV[row*C + i];       // 不同于广义的矩阵乘法，我们是能避免转置的
     }
     
 }
