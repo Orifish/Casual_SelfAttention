@@ -100,7 +100,7 @@ void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_inde
     cudaDeviceSynchronize();
     
     float * MatMul_output;
-    cudaMallocManaged(&MatMul_output, N * sizeof(float));
+    cudaMallocManaged(&MatMul_output, N*N * sizeof(float));
     Matrix_Mul<<<blocks,threads>>>(Sort_Matrix,N,C,MatMul_output,class_index,index_num,class_num);     
     cudaDeviceSynchronize();
     cudaFree(Sort_Matrix); 
