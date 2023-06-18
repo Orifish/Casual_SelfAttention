@@ -6,32 +6,6 @@
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
 __device__ long wait_num;
-/*
-__global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* index_num,int* class_index,int* sort_num,int* Orign){
-    int blk_idx = blockIdx.x;
-    int thd_idx = threadIdx.x;
-    int idx = blk_idx * blockDim.x + thd_idx;
-    if (idx >= N * C) {
-    return;
-    }else{
-        int row = idx/C;
-        int true_class = class_index[row];      // 知道这行是什么class
-        int start_row = 0;
-        for (int i=true_class;i>0;i--){
-            start_row += index_num[true_class];
-        }       // 定这种类别的初始行
-        int row_target = start_row + sort_num[row];       // 得到我应该把这一行给复制到哪一行
-
-        for (int i = 0;i<C;i++){
-            Sort_Matrix[row_target*C + i] = QKV[row*C+i]       // copy过去
-        }
-        Orign[row_target] = row;        // 把原本的位置保存
-    }
-}*/
-
-
-
-
 __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin,float* row_sum){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
@@ -43,7 +17,6 @@ __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_
         int col = idx%C;
         int next_class = class_index[row]+1;      // 知道这行是什么class，并且因为要计算下一个index的起始行，所以要+1
         int this_class = class_index[row];
-
         if(next_claas>class_num){       // 如果已经是最后一类了
             int this_start_row = 0;
             int next_start_row = N;
@@ -61,8 +34,12 @@ __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_
                 next_start_row += index_num[next_class];
             }       // 定这种类别和下个类别的初始行
         }
-            if(row<this_start_row)  return;
-            if(row>=next_start_row)     return;         // 注意等于号，此处欠推导
+            if(row<this_start_row){
+                return;
+            }  
+            if(row>=next_start_row){
+                return;             
+            }           
             float mid_NN = 0;
             for(int i=0;i<C;i++){
                 mid_NN += QKV[row*C + i] * QKV[row*C + i];       // 不同于广义的矩阵乘法，我们是能避免转置的，这里的QKV应该是Q和K
@@ -76,7 +53,7 @@ __global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_
             output[row*C+col] = 0;
             int row_target = Orign[row];
             for(int i=0;i<C;i++){
-                atomicAdd(&output[row_target*C+col],QKV[row*C+i]*(mid_NN/Block_sum));       
+                atomicAdd(&output[row_target*C+col],QKV[row*C+i]*(mid_NN/row_sum));       
             }   // 此外，这里的QKV应该是V，并且这里直接还原回了原行   
     }
 }
