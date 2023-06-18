@@ -33,7 +33,7 @@ __global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* i
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
     int idx = blk_idx * blockDim.x + thd_idx;
-    if (idx >= batch_size * N * C) {
+    if (idx >= N * C) {
     return;
     }else{
         int row = idx/C;
@@ -54,35 +54,52 @@ __global__ void SortCopy_Kernal(float* Sort_Matrix,int N,int C,float* QKV,int* i
 
 
 
-__global__ void Matrix_Mul(float* QKV,int N,int C,float* output){
+__global__ void Matrix_Mul(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
     int idx = blk_idx * blockDim.x + thd_idx;
     int row = idx/C;
     int col = idx%C;
-    output[row][col] = 0;
-    for(int i=0;i<C;i++){
-        output[row*C + col] = QKV[row*C + i] * QKV[row*C + i];       // 不同于广义的矩阵乘法，我们是能避免转置的
+    int row = idx/C;
+    int next_class = class_index[row]+1;      // 知道这行是什么class，并且因为要计算下一个index的起始行，所以要+1
+    int this_class = class_index[row];
+    if(next_claas>=class_num)   return;
+    else{
+        int this_start_row = 0;
+        int next_start_row = 0;
+        for (int i=true_class;i>0;i--){
+            this_start_row += index_num[this_class];
+            next_start_row += ineex_num[next_class];
+        }       // 定这种类别和下个类别的初始行
+        if(row<this_start_row)  return;
+        if(row>=next_start_row)     return;         // 注意等于号，此处欠推导
+        output[row*C+col] = 0;
+        for(int i=0;i<C;i++){
+            output[row*C + col] = QKV[row*C + i] * QKV[row*C + i];       // 不同于广义的矩阵乘法，我们是能避免转置的
+        }
     }
-    
+    // 到此，得到Class数个小的方阵，都在对角位置。
+
 }
 
-
-void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,int* next_index,float* output,int* sort_num) {
+// sort_num是每一个行对应类，在自己类中的排序，在pytorch中给出，可以用[,:这一行]==index来得到。
+// index_num是已经降序排序完的索引对应的数量
+void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* sort_num) {
     cudaError_t err;
 
     dim3 blocks(DIVUP(N * C, THREADS_PER_BLOCK)); // blockIdx.x(col), blockIdx.y(row)
     dim3 threads(THREADS_PER_BLOCK);
 
-    float* Sort_Matrix[N][C];
-    int* Orign[N][1];       // 记录原本是哪行的
+    float* Sort_Matrix;
+    int* Orign;       // 记录原本是哪行的
 
     cudaMallocManaged(&Sort_Matrix, N*C * sizeof(float));
     cudaMallocManaged(&Orign, N * sizeof(int));
 
     SortCopy_Kernal<<<blocks,threads>>>(Sort_Matrix,N,C,QKV,index_num,class_index,sort_num,Orign);        // 注意index_num必须要已经降序排序完了。
-
-
+    
+    float * MatMul_output[N*N];
+    Matrix_Mul<<<blocks,threads>>>(Sort_Matrix,N,C,MatMul_output,class_index,index_num,class_num);      
     // 由类别分块做SA
     // Todo...
 
