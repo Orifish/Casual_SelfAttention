@@ -15,18 +15,17 @@
   CHECK_CONTIGUOUS(x)
 
 
-void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin); 
+void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin,float* row_sum,float* row_max);
 
 
-// 输入N行C列的Tensor Q、K、V
-// sort_num是每一个行对应类，在自己类中的排序，在pytorch中给出，可以用[,:这一行]==index来得到。
-// index_num是已经降序排序完的索引对应的数量
-int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_tensor,at::Tensor index_num_tensor, at::Tensor QKV_tensor,at::Tensor output_tensor,at::Tensor Origin_tensor,at::Tensor row_sum_tensor) {
+int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_tensor,at::Tensor index_num_tensor, at::Tensor QKV_tensor,at::Tensor output_tensor,at::Tensor Origin_tensor,at::Tensor row_sum_tensor,at::Tensor row_max_tensor) {
     CHECK_INPUT(class_index_tensor);
     CHECK_INPUT(index_num_tensor);
     CHECK_INPUT(QKV_tensor);
     CHECK_INPUT(output_tensor);
     CHECK_INPUT(Origin_tensor);
+    CHECK_INPUT(row_sum_tensor);
+    CHECK_INPUT(row_max_tensor);
 
     
     int *class_index = class_index_tensor.data_ptr<int>();    // N*1的组别tensor
@@ -35,9 +34,10 @@ int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_te
     float *output = output_tensor.data_ptr<float>();      // N*C tensor
     int* Origin = Origin_tensor.data_ptr<int>();   // 输入的原index，N*1
     float* row_sum = row_sum_tensor.data_ptr<float>();    // 输入全0的row_sum;
+    float* row_max = row_max_tensor.data_ptr<float>();    // 输入全0的row_sum;
 
     // cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
-    casualSA_kernel_forward_launcher(class_num,N,C,class_index,index_num,QKV,output,Origin,row_sum);
+    casualSA_kernel_forward_launcher(class_num,N,C,class_index,index_num,QKV,output,Origin,row_sum,row_max);
     return 1;
 }
 
