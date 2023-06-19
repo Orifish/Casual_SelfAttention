@@ -6,7 +6,7 @@
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
 __device__ long wait_num;
-__global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin,float* row_sum，float* row_max){
+__global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin,float* row_sum,float* row_max){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
     int idx = blk_idx * blockDim.x + thd_idx;
