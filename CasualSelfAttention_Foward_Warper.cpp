@@ -3,7 +3,6 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <torch/serialize/tensor.h>
-// #include <cublas_v2.h>   // 思考要不要用这个做矩阵乘法
 
 
 #define CHECK_CUDA(x) \
@@ -43,7 +42,6 @@ int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_te
 
 
 
-// To do
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("casualSA_forward_wrapper", &casualSA_forward_wrapper, "casualSA_forward_wrapper");
 }
