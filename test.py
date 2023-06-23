@@ -13,6 +13,10 @@ def CasualSelfAttention_(QKV,class_index):
     class_index = torch.sort(class_index,dim=0)[0]
     row_sum = torch.zeros(N,1)
     row_max = torch.zeros(N,1)
+    index_num_2 = torch.cumsum(index_num * index_num, dim=0)
+    Thread_num = int(index_num_2[index_num_2.size()[0] - 1])
+    index_num_2[1:int(index_num_2.size()[0])] = index_num_2.clone()[0:int(index_num_2.size()[0] - 1)]
+    index_num_2[0] = 0
 
     input_Query = torch.transpose(input_Query,0,1)[0]
     output = torch.transpose(output,0,1)[0]
@@ -23,8 +27,9 @@ def CasualSelfAttention_(QKV,class_index):
     Origin_index = Origin_index.int().cuda()
     row_sum = row_sum.cuda()
     row_max =row_max.cuda()
+    index_num_2 = index_num_2.int().cuda()
     begin = time.time_ns()
-    CasualSelfAttention.casualSA_forward_wrapper(class_num,N,C,class_index,index_num,input_Query,output,Origin_index,row_sum,row_max)
+    CasualSelfAttention.casualSA_forward_wrapper(class_num,N,C,class_index,index_num,input_Query,output,Origin_index,row_sum,row_max,index_num_2,Thread_num)
     end = time.time_ns()
     print('kernel takes:',(end-begin)/1000000.0,'ms')
     # a = F.softmax(input_Query[class_index[class_index==0].long(),:].matmul(input_Query[class_index[class_index==0].long(),:].transpose(0,1)),dim=1).matmul(input_Query[class_index[class_index==0].long(),:])
@@ -36,8 +41,8 @@ if __name__ == '__main__':
     N = 10000
     C = 100
     QKV = torch.rand([N, C])
-    class_index = torch.randint(0, 2, [N, 1])
+    class_index = torch.randint(0, 20, [N, 1])
 
     output = CasualSelfAttention_(QKV,class_index)
 
-    print(output)
+    # print(output)
