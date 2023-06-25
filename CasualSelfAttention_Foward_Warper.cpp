@@ -14,10 +14,10 @@
   CHECK_CONTIGUOUS(x)
 
 
-void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin,float* row_sum,float* row_max,int* index_num_2,int Thread_num);
+void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin,float* row_sum,int* row_max,int* index_num_2,int Thread_num,int N_max);
 
 
-int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_tensor,at::Tensor index_num_tensor, at::Tensor QKV_tensor,at::Tensor output_tensor,at::Tensor Origin_tensor,at::Tensor row_sum_tensor,at::Tensor row_max_tensor,at::Tensor index_num_2_tensor,int Thread_num) {
+int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_tensor,at::Tensor index_num_tensor, at::Tensor QKV_tensor,at::Tensor output_tensor,at::Tensor Origin_tensor,at::Tensor row_sum_tensor,at::Tensor row_max_tensor,at::Tensor index_num_2_tensor,int Thread_num,int N_max) {
     CHECK_INPUT(class_index_tensor);
     CHECK_INPUT(index_num_tensor);
     CHECK_INPUT(QKV_tensor);
@@ -27,18 +27,18 @@ int casualSA_forward_wrapper(int class_num,int N,int C,at::Tensor class_index_te
     CHECK_INPUT(row_max_tensor);
     CHECK_INPUT(index_num_2_tensor);
 
-    
+
     int *class_index = class_index_tensor.data_ptr<int>();    // N*1的组别tensor
     int *index_num = index_num_tensor.data_ptr<int>();     // 组数*1的tensor
     float *QKV = QKV_tensor.data_ptr<float>();      // 使用应分别为QKV，N*C tensor
     float *output = output_tensor.data_ptr<float>();      // N*C tensor
     int* Origin = Origin_tensor.data_ptr<int>();   // 输入的原index，N*1
     float* row_sum = row_sum_tensor.data_ptr<float>();    // 输入全0的row_sum;
-    float* row_max = row_max_tensor.data_ptr<float>();    // 输入全0的row_sum;
+    int* row_max = row_max_tensor.data_ptr<int>();    // 输入全0的row_sum;
     int* index_num_2 = index_num_2_tensor.data_ptr<int>();    // 输入右移后的累积和，首位是0
 
     // cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
-    casualSA_kernel_forward_launcher(class_num,N,C,class_index,index_num,QKV,output,Origin,row_sum,row_max,index_num_2,Thread_num);
+    casualSA_kernel_forward_launcher(class_num,N,C,class_index,index_num,QKV,output,Origin,row_sum,row_max,index_num_2,Thread_num,N_max);
     return 1;
 }
 

@@ -6,69 +6,75 @@
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
 __device__ int wait_num;
-__global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin,float* row_sum,float* row_max,int* index_num_2,int Thread_num){
+__global__ void CasualSA_Kernal(float* QKV,int N,int C,float* output,int* class_index,int* index_num,int class_num,int* Origin,float* row_sum,int* row_max,int* index_num_2,int Thread_num,int N_max){
     int blk_idx = blockIdx.x;
     int thd_idx = threadIdx.x;
     int idx = blk_idx * blockDim.x + thd_idx;
-    if(idx>=Thread_num){
+    unsigned int stride = blockDim.x;
+    int row_NMax = blk_idx;
+    int class_id = row_NMax / N_max;
+    int row_thisclass = row_NMax%N_max;
+    int col_thisclass = thd_idx;
+
+    if(row_thisclass>=index_num[class_id])
         return;
-    }else{
-        int class_id = 0;
-        int sum = 0;
-        for(int i=0;i<class_num;i++){
-            if(idx<index_num_2[i]){
-                class_id = i-1;
-                sum = index_num_2[class_id];
-                break;
-            }
-            class_id = class_num-1;
-            sum = index_num_2[class_id];
-        }
-        int idx_N_row = 0;
+    int row_NC = row_thisclass;
+    for(int i=0;i<class_id;i++){
+        row_NC += index_num[i];
+    }
+    while(col_thisclass<index_num[class_id]){
+        int col_NC = col_thisclass;
         for(int i=0;i<class_id;i++){
-            idx_N_row += index_num[i];
+            col_NC += index_num[i];
         }
-        int idx_N_col = idx_N_row + (idx-sum)%index_num[class_id];
-        idx_N_row += (idx-sum)/index_num[class_id];
-        float mid_NN = 0;
+        float mid=0;
         for(int i=0;i<C;i++){
-            mid_NN += QKV[idx_N_row*C + i] * QKV[idx_N_col*C + i];
+            mid  += QKV[row_NC*C + i]*QKV[col_NC*C + i];
         }
-        
-
-
-        atomicAdd(&row_sum[idx_N_row],exp(mid_NN));
-        atomicAdd(&wait_num,1);       // 开始等待
-        while(wait_num!=Thread_num);     // 同步整个grid
-
-        int row_target = Origin[idx_N_row];
-
+        int Compare = mid * 10000000;
+        atomicMax(&row_max[row_NC],Compare);            // save the max of every element without exp
+        atomicAdd(&row_sum[row_NC],exp(mid));
+        col_thisclass += stride;
+    }
+    __syncthreads();        // wait one line(block) OK
+    col_thisclass = thd_idx;        // refresh the col id
+    int row_target = Origin[row_NC];
+    while(col_thisclass<index_num[class_id]){
+        int col_NC = col_thisclass;
+        for(int i=0;i<class_id;i++){
+            col_NC += index_num[i];
+        }
+        float mid=0;
         for(int i=0;i<C;i++){
-            float to_add = QKV[idx_N_row*C+i]*(exp(mid_NN)/row_sum[idx_N_row]);
+            mid  += QKV[row_NC*C + i]*QKV[col_NC*C + i];
+        }
+        for(int i=0;i<C;i++){
+            float row_max_float_pointfront = row_max[row_NC]/10000000;
+            float row_max_float_back = row_max[row_NC]%10000000;
+            row_max_float_back =row_max_float_back/10000000.0;
+            float row_max_float = row_max_float_pointfront +  row_max_float_back;
+            float to_add = QKV[col_NC*C+i]*(exp(mid-row_max_float)/(row_sum[row_NC]/exp(row_max_float)));
             atomicAdd(&output[row_target*C+i],to_add);
+
+
         }
-            /*
-            for(int i=0;i<C;i++){
-                atomicAdd(&output[row_target*C+col],QKV[row*C+i]*((mid_NN-row_max[row])/row_sum[row]));
-            }*/
+        col_thisclass += stride;
     }
 }
 
 
-void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin,float* row_sum,float* row_max,int* index_num_2,int Thread_num) {
+void casualSA_kernel_forward_launcher(int class_num,int N,int C, int* class_index,int* index_num, float* QKV,float* output,int* Origin,float* row_sum,int* row_max,int* index_num_2,int Thread_num,int N_max) {
     cudaError_t err;
 
-    dim3 blocks(DIVUP(Thread_num, THREADS_PER_BLOCK)); // blockIdx.x(col), blockIdx.y(row)
+
+
+    dim3 blocks(class_num*N_max); // blockIdx.x(col), blockIdx.y(row)
     dim3 threads(THREADS_PER_BLOCK);
 
     int value=0;
-    cudaMemcpyToSymbol(wait_num, &value, sizeof(int));     // 初始化wai_num
-    CasualSA_Kernal<<<blocks,threads>>>(QKV,N,C,output,class_index,index_num,class_num,Origin,row_sum,row_max,index_num_2,Thread_num);     
-    // cudaFree(Sort_Matrix); 
-    // cudaFree(Origin);
-    // SA_forward_kernel<<<blocks, threads>>>(batch_size, class_num,N,C,class_index,index_num,Q,K,V,next_index,output);
-    // cudaDeviceSynchronize();  // for using printf in kernel function
-    //cudaDeviceSynchronize();
+    cudaMemcpyToSymbol(wait_num, &value, sizeof(int));     // initialize the wait_num
+    CasualSA_Kernal<<<blocks,threads>>>(QKV,N,C,output,class_index,index_num,class_num,Origin,row_sum,row_max,index_num_2,Thread_num,N_max);
+    cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (cudaSuccess != err) {
     fprintf(stderr, "CUDA kernel failed : %s\n", cudaGetErrorString(err));
