@@ -1,9 +1,14 @@
 # Casual_SelfAttention
-Self Attention for PointCloud 
+Self Attention for PointCloud.
 
-## To build CasualSelfAttention
+## To run demo 
+### 1. Build the CasualSelfAttention as a python package
+```
 rm -rf build
-python setup.py develop
 
-## To test it 
+python setup.py develop
+```
+### 2. Run a demo
+```
 python test.py
+```

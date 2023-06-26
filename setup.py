@@ -54,7 +54,7 @@ def get_extensions():
 
 setup(
     name="CasualSelfAttention",
-    version="0.0.2",
+    version="1.0.0",
     author="JunchengYu",
     description="Casual Self-Attention",
     packages=find_packages(),
